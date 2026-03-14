@@ -1,0 +1,54 @@
+<?php
+
+declare(strict_types=1);
+
+use Hyva\Theme\Model\ViewModelRegistry;
+use Hyva\Theme\ViewModel\HyvaCsp;
+use Hyva\Theme\ViewModel\LucideIcons;
+use Magento\Framework\Escaper;
+use Magento\Framework\View\Element\Template;
+use Magento\Search\Helper\Data;
+
+/** @var Escaper $escaper */
+/** @var Template $block */
+/** @var HyvaCsp $hyvaCsp */
+/** @var ViewModelRegistry $viewModels */
+/** @var LucideIcons $lucideIcons */
+/** @var Data $helper */
+
+$helper = $this->helper(Data::class);
+$lucideIcons = $viewModels->require(LucideIcons::class);
+?>
+<search title="<?= $escaper->escapeHtmlAttr(__('Store')) ?>" role="search">
+    <form
+        id="search_mini_form"
+        class="flex my-3"
+        method="get"
+        @submit.prevent="search()"
+        x-ref="form"
+    >
+        <label class="sr-only" for="search">
+            <?= $escaper->escapeHtml(__('Search')) ?>
+        </label>
+        <input
+            id="search"
+            x-ref="searchInput"
+            type="search"
+            autocomplete="off"
+            name="q"
+            x-model="query"
+            @input.debounce.300ms="search"
+            placeholder="<?= $escaper->escapeHtmlAttr(__('Search entire store here...')) ?>"
+            maxlength="<?= $escaper->escapeHtmlAttr($helper->getMaxQueryLength()) ?>"
+            class="form-input w-full rounded-e-none"
+        >
+        <button
+            type="submit"
+            class="btn btn-primary p-2.5 rounded-s-none shrink-0 outline-offset-0"
+            title="<?= $escaper->escapeHtmlAttr(__('Search')) ?>"
+            aria-label="<?= $escaper->escapeHtmlAttr(__('Search')) ?>"
+        >
+            <?= $lucideIcons->searchHtml('', 20, 20, ['aria-hidden' => 'true']); ?>
+        </button>
+    </form>
+</search>

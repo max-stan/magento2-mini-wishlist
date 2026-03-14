@@ -1,0 +1,23 @@
+{
+    "name": "max-stan/module-mini-wishlist",
+    "type": "magento2-module",
+    "description": "Mini wishlist popup for Hyvä theme with products search",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Maxim Stanislavskyi",
+            "email": "stanislavskiymaksym@gmail.com"
+        }
+    ],
+    "require": {
+        "magento/framework": "*"
+    },
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "MaxStan\\MiniWishlist\\": ""
+        }
+    }
+}

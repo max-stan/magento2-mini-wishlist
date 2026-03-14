@@ -1,0 +1,365 @@
+<?php
+/**
+ * Hyvä Themes - https://hyva.io
+ * Copyright © Hyvä Themes. All rights reserved.
+ * See COPYING.txt for license details.
+ */
+
+declare(strict_types=1);
+
+use Hyva\GraphqlViewModel\ViewModel\GraphqlViewModel;
+use Hyva\Theme\Model\ViewModelRegistry;
+use Hyva\Theme\ViewModel\Currency;
+use Hyva\Theme\ViewModel\HyvaCsp;
+use Hyva\Theme\ViewModel\Store;
+use Hyva\Theme\ViewModel\LucideIcons;
+use Magento\Framework\Escaper;
+use Magento\Framework\View\Element\Template;
+
+/** @var Escaper $escaper */
+/** @var Template $block */
+/** @var HyvaCsp $hyvaCsp */
+/** @var ViewModelRegistry $viewModels */
+/** @var Store $viewModelStore */
+/** @var LucideIcons $lucideIcons */
+/** @var GraphqlViewModel $gqlViewModel */
+/** @var Currency $currencyViewModel */
+
+$storeViewModel = $viewModels->require(Store::class);
+$gqlViewModel = $viewModels->require(GraphqlViewModel::class);
+$currencyViewModel = $viewModels->require(Currency::class);
+$lucideIcons = $viewModels->require(LucideIcons::class);
+$gqlRemoveProductsFromWishlistQuery = '
+    mutation ($wishlistId: ID!, $itemIds: [ID!]!) {
+        removeProductsFromWishlist(wishlistId: $wishlistId, wishlistItemsIds: $itemIds) {
+            wishlist {
+                items_count
+            }
+        }
+    }
+';
+$gqlAddWishlistItemsToCartQuery = '
+    mutation ($wishlistId: ID!, $itemIds: [ID!]!) {
+        addWishlistItemsToCart(wishlistId: $wishlistId, wishlistItemIds: $itemIds) {
+            status
+        }
+    }
+';
+$gqlProductsQuery = '
+    query ($query: String!) {
+        products(search: $query, pageSize: 5) {
+            items {
+                id
+                sku
+                name
+            }
+        }
+    }
+';
+?>
+
+<script>
+    function initWishlistDrawer() {
+        return {
+            open: false,
+            isLoading: false,
+            wishlistItems: [],
+            query: '',
+            itemsCount: 0,
+            autocompleteNumber: 100,
+
+            productIsVisibleInSite() {
+                return !!this.item.product_is_saleable_and_visible;
+            },
+
+            productIsNotVisibleInSite() {
+                return !this.productIsVisibleInSite();
+            },
+
+            wishlistIsEmpty() {
+                return this.itemsCount === 0;
+            },
+
+            closeWishlistDrawer() {
+                this.open = false;
+            },
+
+            getItemQty() {
+                const params = JSON.parse(this.item.add_to_cart_params);
+                return +params.data.qty || 1;
+            },
+
+            getWishlistItemId() {
+                const params = JSON.parse(this.item.add_to_cart_params);
+                return +params.data.item;
+            },
+
+            getConfigureUrl() {
+                const { product_id: id } = this.item;
+                const itemId = this.getWishlistItemId();
+                const qty = this.getItemQty();
+
+                return BASE_URL + `wishlist/index/configure/id/${itemId}/product_id/${id}/qty/${qty}/`
+            },
+
+            getData() {
+                const data = this.$event.detail.data;
+
+                if (data.wishlist) {
+                    this.wishlist = data.wishlist;
+                    this.itemsCount = data.wishlist.items && data.wishlist.items.length || 0;
+                    this.setWishlistItems();
+                }
+                this.isLoading = false;
+            },
+
+            setWishlistItems() {
+                this.wishlistItems = this.wishlist.items && this.wishlist.items.sort((a, b) => b.item_id - a.item_id) || [];
+            },
+
+            productAriaLabel() {
+                return hyva.strf(this.$el.dataset.ariaLabel, this.item.product_name)
+            },
+
+            async removeProductsFromWishlist() {
+                const query = `<?= /** @noEscape */ $gqlViewModel->query('removeProductsFromWishlistQuery', $gqlRemoveProductsFromWishlistQuery) ?>`;
+                const variables = {
+                    wishlistId: this.wishlist.wishlist_id,
+                    itemIds: [this.getWishlistItemId()]
+                };
+
+                this.isLoading = true;
+                await hyvaWishlistGraphql('POST', query, variables);
+                this.isLoading = false;
+            },
+
+            async addWishlistItemsToCart() {
+                const query = `<?= /** @noEscape */ $gqlViewModel->query('addWishlistItemsToCartQuery', $gqlAddWishlistItemsToCartQuery) ?>`;
+                const variables = {
+                    wishlistId: this.wishlist.wishlist_id,
+                    itemIds: [this.getWishlistItemId()]
+                };
+
+                this.isLoading = true;
+                await hyvaWishlistGraphql('POST', query, variables);
+                this.isLoading = false;
+            },
+
+            async search() {
+                const query = `<?= /** @noEscape */ $gqlViewModel->query('productsQuery', $gqlProductsQuery) ?>`;
+                const variables = {
+                    search: this.query
+                };
+
+                this.isLoading = true;
+                await hyvaWishlistGraphql('GET', query, variables);
+                this.isLoading = false;
+            }
+
+            eventListeners: {
+                ['@private-content-loaded.window'](event) {
+                    this.getData(event.detail.data);
+                },
+                ['@toggle-wishlist.window'](event) {
+                    this.open = !!event.detail.isOpen;
+                },
+            }
+        }
+    }
+
+    window.addEventListener('alpine:init', () => {
+        Alpine.data('initWishlistDrawer', initWishlistDrawer);
+    }, { once: true });
+
+    async function hyvaWishlistGraphql(method = 'GET', query, variables) {
+        await fetch(BASE_URL + 'graphql', {
+            method,
+            headers: {
+                'Store': '<?= $escaper->escapeJs($storeViewModel->getStoreCode()) ?>',
+                'Content-Currency': '<?= $escaper->escapeJs($currencyViewModel->getCurrentCurrencyCode()) ?>',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query,
+                variables
+            })
+        }).then(function (response) {
+            if (response.ok) {
+                window.dispatchEvent(
+                    new CustomEvent('reload-customer-section-data', {
+                        detail: { sections: ['wishlist'] }
+                    })
+                );
+            }
+        }).catch(function (error) {
+            typeof window.dispatchMessages !== "undefined" && window.dispatchMessages(
+                [{
+                    type: "error",
+                    text: error
+                }], 5000
+            );
+        });
+    }
+</script>
+<?php $hyvaCsp->registerInlineScript() ?>
+
+<dialog
+    id="wishlist-drawer"
+    aria-labelledby="wishlist-drawer-title"
+    class="w-[480px] md:w-[640px] h-full max-h-full me-0 open:flex flex-col transition ease-out duration-300 motion-reduce:duration-0 rounded-e-none"
+    x-data="initWishlistDrawer"
+    x-bind="eventListeners"
+    x-show="open"
+    x-htmldialog="closeWishlistDrawer"
+    closeby="any"
+    x-transition:enter="transition ease-in-out duration-500"
+    x-transition:enter-start="translate-x-full"
+    x-transition:enter-end="translate-x-0"
+    x-transition:leave="transition ease-in-out duration-300"
+    x-transition:leave-start="translate-x-0"
+    x-transition:leave-end="translate-x-full"
+>
+    <?= $block->getChildHtml('wishlist-drawer.top'); ?>
+
+    <div class="flex gap-2 justify-between items-center">
+        <p id="wishlist-drawer-title" class="text-2xl">
+            <strong><?= $escaper->escapeHtml(__('My Wishlist')) ?></strong>
+            <span
+                class="items-total text-xs"
+            ></span>
+        </p>
+        <button
+            type="button"
+            class="btn bg-transparent border-transparent p-2"
+            @click="closeWishlistDrawer"
+            aria-label="<?= $escaper->escapeHtmlAttr(__('Close wishlist')) ?>"
+        >
+            <?= $lucideIcons->xHtml('', 24, 24, ['aria-hidden' => 'true']); ?>
+        </button>
+    </div>
+
+    <?= $block->getChildHtml('wishlist-drawer.items.before'); ?>
+
+    <template x-if="wishlistIsEmpty">
+        <div class="grow grid place-items-center">
+            <div class="text-center">
+                <?= $lucideIcons->heartPlusHtml('inline-block text-fg/30 max-w-full h-auto', 120, 120, ['aria-hidden' => 'true']); ?>
+                <p class="mt-10 text-xl">
+                    <strong><?= $escaper->escapeHtml(__('Wishlist is empty')) ?></strong>
+                </p>
+            </div>
+        </div>
+    </template>
+
+    <template x-if="itemsCount">
+        <ul class="grow flex flex-col overflow-y-auto overscroll-y-contain mask-overflow mask-dir-y">
+            <template x-for="item in wishlistItems">
+                <li class="flex gap-4 md:gap-6 items-start py-4 px-1 border-b border-slate-200">
+                    <template x-if="productIsVisibleInSite">
+                        <a
+                            class="block shrink-0 max-w-[25%]"
+                            :href="item.product_url"
+                            data-aria-label="<?= $escaper->escapeHtmlAttr(__('Product "%0"')) ?>"
+                            :title="item.product_name"
+                        >
+                            <img
+                                :src="item.image.src"
+                                :width="item.image.width"
+                                :height="item.image.height"
+                                loading="lazy"
+                                :alt="item.product_name"
+                            >
+                        </a>
+                    </template>
+                    <template x-if="productIsNotVisibleInSite">
+                        <div class="block shrink-0 max-w-[25%]">
+                            <img
+                                :src="item.image.src"
+                                :width="item.image.width"
+                                :height="item.image.height"
+                                loading="lazy"
+                                :alt="item.product_name"
+                            />
+                        </div>
+                    </template>
+                    <div class="grow space-y-4">
+                        <div class="flex gap-2 justify-between items-center">
+                            <p class="text-lg">
+                                <span x-html="getItemQty"></span> x <strong x-html="item.product_name"></strong>
+                            </p>
+                            <span class="price-box" x-html="item.product_price"></span>
+                        </div>
+                        <dl class="table text-sm">
+                            <div class="table-row">
+                                <dt class="table-cell font-normal min-w-16 pe-2 pb-2">
+                                    <?= $escaper->escapeHtml(__('Sku')) ?>
+                                </dt>
+                                <dd class="table-cell font-bold pb-2" x-html="item.product_sku"></dd>
+                            </div>
+                        </dl>
+                        <div class="flex flex-wrap gap-2 justify-end items-center">
+                            <div class="inline-flex flex-wrap items-center gap-1">
+                                <button
+                                    type="button"
+                                    x-show="productIsVisibleInSite"
+                                    class="btn btn-primary"
+                                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Add product "%0" to cart')) ?>"
+                                    :aria-label="productAriaLabel"
+                                    @click="addWishlistItemsToCart"
+                                >
+                                    <?= $escaper->escapeHtml(__('Add to Cart')) ?>
+                                </button>
+                                <a
+                                    :href="getConfigureUrl"
+                                    x-show="productIsVisibleInSite"
+                                    class="btn p-2"
+                                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Edit product "%0"')) ?>"
+                                    :aria-label="productAriaLabel"
+                                >
+                                    <?= $lucideIcons->pencilHtml('', 20, 20, ['aria-hidden' => 'true']); ?>
+                                </a>
+                                <button
+                                    type="button"
+                                    class="btn p-2"
+                                    @click="removeProductsFromWishlist"
+                                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Remove product "%0" from cart')) ?>"
+                                    :aria-label="productAriaLabel"
+                                >
+                                    <?= $lucideIcons->trashHtml('', 20, 20, ['aria-hidden' => 'true']); ?>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+            </template>
+        </ul>
+    </template>
+
+    <?= $block->getChildHtml('wishlist-drawer.bottom'); ?>
+
+    <template x-if="itemsCount">
+        <div>
+            <div class="flex flex-col gap-y-4 mt-8">
+                <a
+                    href="<?= $escaper->escapeUrl($block->getUrl('wishlist')) ?>"
+                    class="btn btn-secondary"
+                >
+                    <?= $escaper->escapeHtml(__('View and Edit Wishlist')) ?>
+                </a>
+                <?= $block->getChildHtml('extra_actions'); ?>
+            </div>
+        </div>
+    </template>
+
+    <template x-if="wishlistIsEmpty">
+        <div class="flex flex-col">
+            <button
+                type="button"
+                @click="closeWishlistDrawer"
+                class="btn btn-primary"
+            ><?= $escaper->escapeHtml(__('Continue Shopping')) ?></button>
+        </div>
+    </template>
+
+    <?= $block->getChildHtml('loading') ?>
+</dialog>

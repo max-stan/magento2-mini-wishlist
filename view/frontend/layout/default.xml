@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+    <body>
+        <referenceBlock name="header-content">
+            <arguments>
+                 <argument name="show_wishlist" xsi:type="boolean">true</argument>
+            </arguments>
+
+            <block
+                name="header.content.wishlist-button"
+                template="MaxStan_MiniWishlist::header/wishlist.phtml"
+                as="wishlist"
+                ifconfig="wishlist/general/active"
+            />
+        </referenceBlock>
+        <referenceContainer name="before.body.end">
+            <block
+                name="wishlist-drawer"
+                template="MaxStan_MiniWishlist::html/wishlist/wishlist-drawer.phtml"
+                ifconfig="wishlist/general/active"
+            >
+                <block name="wishlist-drawer-loading" as="loading" template="Hyva_Theme::ui/loading.phtml"/>
+                <container name="extra_actions"/>
+                <container name="wishlist-drawer.top"/>
+                <container name="wishlist-drawer.items.before">
+                    <block name="wishlist-drawer-search"
+                           template="MaxStan_MiniWishlist::html/wishlist/search.phtml" />
+                </container>
+                <container name="wishlist-drawer.totals.before"/>
+                <container name="wishlist-drawer.bottom"/>
+            </block>
+        </referenceContainer>
+    </body>
+</page>
