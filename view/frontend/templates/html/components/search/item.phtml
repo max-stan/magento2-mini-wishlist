@@ -1,0 +1,79 @@
+<?php
+
+declare(strict_types=1);
+
+use Hyva\Theme\Model\ViewModelRegistry;
+use Hyva\Theme\ViewModel\HyvaCsp;
+use Hyva\Theme\ViewModel\LucideIcons;
+use Magento\Framework\Escaper;
+use Magento\Framework\View\Element\Template;
+use MaxStan\MiniWishlist\ViewModel\ViewConfig;
+
+/** @var Escaper $escaper */
+/** @var Template $block */
+/** @var HyvaCsp $hyvaCsp */
+/** @var ViewModelRegistry $viewModels */
+/** @var LucideIcons $lucideIcons */
+/** @var ViewConfig $viewConfig */
+
+$lucideIcons = $viewModels->require(LucideIcons::class);
+$viewConfig = $viewModels->require(ViewConfig::class);
+[$width, $height] = $viewConfig->getThumbnailSize();
+?>
+<li class="flex gap-4 md:gap-6 items-start py-4 px-1 border-b border-slate-200">
+    <template x-if="productIsVisibleInSite">
+        <a
+            class="block shrink-0 max-w-[25%]"
+            :href="item.product_url"
+            data-aria-label="<?= $escaper->escapeHtmlAttr(__('Product "%0"')) ?>"
+            :title="item.name"
+        >
+            <img
+                :src="item.thumbnail.url"
+                :alt="item.name"
+                width="<?= $escaper->escapeHtml($width) ?>"
+                height="<?= $escaper->escapeHtml($height) ?>"
+                loading="lazy"
+            >
+        </a>
+    </template>
+    <template x-if="productIsNotVisibleInSite">
+        <div class="block shrink-0 max-w-[25%]">
+            <img
+                :src="item.thumbnail.url"
+                width="<?= $escaper->escapeHtml($width) ?>"
+                height="<?= $escaper->escapeHtml($height) ?>"
+                loading="lazy"
+                :alt="item.name"
+            />
+        </div>
+    </template>
+    <div class="grow space-y-4">
+        <div class="flex gap-2 justify-between items-center">
+            <p class="text-lg">
+                <strong x-html="item.name"></strong>
+            </p>
+            <span class="font-bold" x-html="finalPrice"></span>
+        </div>
+        <dl class="table text-sm">
+            <div class="table-row">
+                <dt class="table-cell font-normal min-w-16 pe-2 pb-2">
+                    <?= $escaper->escapeHtml(__('Sku')) ?>
+                </dt>
+                <dd class="table-cell font-bold pb-2" x-html="item.sku"></dd>
+            </div>
+        </dl>
+        <div class="flex flex-wrap gap-2 justify-end items-center">
+            <div class="inline-flex flex-wrap items-center gap-1">
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Add product "%0" to cart')) ?>"
+                    :aria-label="productAriaLabel"
+                >
+                    <?= $escaper->escapeHtml(__('Add to Wishlist')) ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</li>

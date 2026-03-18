@@ -1,9 +1,4 @@
 <?php
-/**
- * Hyvä Themes - https://hyva.io
- * Copyright © Hyvä Themes. All rights reserved.
- * See COPYING.txt for license details.
- */
 
 declare(strict_types=1);
 
@@ -38,20 +33,23 @@ $gqlRemoveProductsFromWishlistQuery = '
         }
     }
 ';
-$gqlAddWishlistItemsToCartQuery = '
-    mutation ($wishlistId: ID!, $itemIds: [ID!]!) {
-        addWishlistItemsToCart(wishlistId: $wishlistId, wishlistItemIds: $itemIds) {
-            status
-        }
-    }
-';
 $gqlProductsQuery = '
     query ($query: String!) {
-        products(search: $query, pageSize: 5) {
+        products(search: $query) {
             items {
                 id
                 sku
                 name
+                thumbnail {
+                    url
+                }
+                price_range {
+                    minimum_price {
+                        final_price {
+                            value
+                        }
+                    }
+                }
             }
         }
     }
@@ -64,9 +62,10 @@ $gqlProductsQuery = '
             open: false,
             isLoading: false,
             wishlistItems: [],
+            wishlist: null,
+            searchItems: [],
             query: '',
             itemsCount: 0,
-            autocompleteNumber: 100,
 
             productIsVisibleInSite() {
                 return !!this.item.product_is_saleable_and_visible;
@@ -78,6 +77,10 @@ $gqlProductsQuery = '
 
             wishlistIsEmpty() {
                 return this.itemsCount === 0;
+            },
+
+            searchQueryIsEmpty() {
+                return !this.query.trim();
             },
 
             closeWishlistDrawer() {
@@ -105,9 +108,9 @@ $gqlProductsQuery = '
             getData() {
                 const data = this.$event.detail.data;
 
-                if (data.wishlist) {
-                    this.wishlist = data.wishlist;
-                    this.itemsCount = data.wishlist.items && data.wishlist.items.length || 0;
+                if (data.wishlist_full) {
+                    this.wishlist = data.wishlist_full;
+                    this.itemsCount = this.wishlist.items && this.wishlist.items.length || 0;
                     this.setWishlistItems();
                 }
                 this.isLoading = false;
@@ -121,6 +124,10 @@ $gqlProductsQuery = '
                 return hyva.strf(this.$el.dataset.ariaLabel, this.item.product_name)
             },
 
+            finalPrice() {
+                return hyva.formatPrice(this.item.price_range.minimum_price.final_price.value, false);
+            },
+
             async removeProductsFromWishlist() {
                 const query = `<?= /** @noEscape */ $gqlViewModel->query('removeProductsFromWishlistQuery', $gqlRemoveProductsFromWishlistQuery) ?>`;
                 const variables = {
@@ -129,32 +136,36 @@ $gqlProductsQuery = '
                 };
 
                 this.isLoading = true;
-                await hyvaWishlistGraphql('POST', query, variables);
+                const response = await hyvaWishlistGraphql('POST', query, variables);
                 this.isLoading = false;
-            },
-
-            async addWishlistItemsToCart() {
-                const query = `<?= /** @noEscape */ $gqlViewModel->query('addWishlistItemsToCartQuery', $gqlAddWishlistItemsToCartQuery) ?>`;
-                const variables = {
-                    wishlistId: this.wishlist.wishlist_id,
-                    itemIds: [this.getWishlistItemId()]
-                };
-
-                this.isLoading = true;
-                await hyvaWishlistGraphql('POST', query, variables);
-                this.isLoading = false;
+                if (response.ok) {
+                    window.dispatchEvent(
+                        new CustomEvent('reload-customer-section-data', {
+                            detail: { sections: ['wishlist', 'wishlist_full'] }
+                        })
+                    );
+                }
             },
 
             async search() {
+                this.query = this.$event.target.value.trim();
+                if (!this.query) {
+                    return;
+                }
+
                 const query = `<?= /** @noEscape */ $gqlViewModel->query('productsQuery', $gqlProductsQuery) ?>`;
                 const variables = {
-                    search: this.query
+                    query: this.query
                 };
 
-                this.isLoading = true;
-                await hyvaWishlistGraphql('GET', query, variables);
-                this.isLoading = false;
-            }
+                const response = await hyvaWishlistGraphql('POST', query, variables);
+                if (!response.ok) {
+                    return;
+                }
+
+                const result = await response.json();
+                this.searchItems = result.data.products.items;
+            },
 
             eventListeners: {
                 ['@private-content-loaded.window'](event) {
@@ -172,33 +183,24 @@ $gqlProductsQuery = '
     }, { once: true });
 
     async function hyvaWishlistGraphql(method = 'GET', query, variables) {
-        await fetch(BASE_URL + 'graphql', {
-            method,
-            headers: {
-                'Store': '<?= $escaper->escapeJs($storeViewModel->getStoreCode()) ?>',
-                'Content-Currency': '<?= $escaper->escapeJs($currencyViewModel->getCurrentCurrencyCode()) ?>',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                query,
-                variables
-            })
-        }).then(function (response) {
-            if (response.ok) {
-                window.dispatchEvent(
-                    new CustomEvent('reload-customer-section-data', {
-                        detail: { sections: ['wishlist'] }
-                    })
-                );
-            }
-        }).catch(function (error) {
-            typeof window.dispatchMessages !== "undefined" && window.dispatchMessages(
-                [{
-                    type: "error",
-                    text: error
-                }], 5000
-            );
-        });
+        try {
+            return await fetch(BASE_URL + 'graphql', {
+                method,
+                headers: {
+                    'Store': '<?= $escaper->escapeJs($storeViewModel->getStoreCode()) ?>',
+                    'Content-Currency': '<?= $escaper->escapeJs($currencyViewModel->getCurrentCurrencyCode()) ?>',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query,
+                    variables
+                })
+            });
+        } catch (error) {
+            console.log(error);
+        }
+
+        return null;
     }
 </script>
 <?php $hyvaCsp->registerInlineScript() ?>
@@ -224,9 +226,7 @@ $gqlProductsQuery = '
     <div class="flex gap-2 justify-between items-center">
         <p id="wishlist-drawer-title" class="text-2xl">
             <strong><?= $escaper->escapeHtml(__('My Wishlist')) ?></strong>
-            <span
-                class="items-total text-xs"
-            ></span>
+            <span class="items-total text-xs"></span>
         </p>
         <button
             type="button"
@@ -240,99 +240,27 @@ $gqlProductsQuery = '
 
     <?= $block->getChildHtml('wishlist-drawer.items.before'); ?>
 
-    <template x-if="wishlistIsEmpty">
-        <div class="grow grid place-items-center">
-            <div class="text-center">
-                <?= $lucideIcons->heartPlusHtml('inline-block text-fg/30 max-w-full h-auto', 120, 120, ['aria-hidden' => 'true']); ?>
-                <p class="mt-10 text-xl">
-                    <strong><?= $escaper->escapeHtml(__('Wishlist is empty')) ?></strong>
-                </p>
-            </div>
-        </div>
-    </template>
-
-    <template x-if="itemsCount">
-        <ul class="grow flex flex-col overflow-y-auto overscroll-y-contain mask-overflow mask-dir-y">
-            <template x-for="item in wishlistItems">
-                <li class="flex gap-4 md:gap-6 items-start py-4 px-1 border-b border-slate-200">
-                    <template x-if="productIsVisibleInSite">
-                        <a
-                            class="block shrink-0 max-w-[25%]"
-                            :href="item.product_url"
-                            data-aria-label="<?= $escaper->escapeHtmlAttr(__('Product "%0"')) ?>"
-                            :title="item.product_name"
-                        >
-                            <img
-                                :src="item.image.src"
-                                :width="item.image.width"
-                                :height="item.image.height"
-                                loading="lazy"
-                                :alt="item.product_name"
-                            >
-                        </a>
-                    </template>
-                    <template x-if="productIsNotVisibleInSite">
-                        <div class="block shrink-0 max-w-[25%]">
-                            <img
-                                :src="item.image.src"
-                                :width="item.image.width"
-                                :height="item.image.height"
-                                loading="lazy"
-                                :alt="item.product_name"
-                            />
-                        </div>
-                    </template>
-                    <div class="grow space-y-4">
-                        <div class="flex gap-2 justify-between items-center">
-                            <p class="text-lg">
-                                <span x-html="getItemQty"></span> x <strong x-html="item.product_name"></strong>
-                            </p>
-                            <span class="price-box" x-html="item.product_price"></span>
-                        </div>
-                        <dl class="table text-sm">
-                            <div class="table-row">
-                                <dt class="table-cell font-normal min-w-16 pe-2 pb-2">
-                                    <?= $escaper->escapeHtml(__('Sku')) ?>
-                                </dt>
-                                <dd class="table-cell font-bold pb-2" x-html="item.product_sku"></dd>
-                            </div>
-                        </dl>
-                        <div class="flex flex-wrap gap-2 justify-end items-center">
-                            <div class="inline-flex flex-wrap items-center gap-1">
-                                <button
-                                    type="button"
-                                    x-show="productIsVisibleInSite"
-                                    class="btn btn-primary"
-                                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Add product "%0" to cart')) ?>"
-                                    :aria-label="productAriaLabel"
-                                    @click="addWishlistItemsToCart"
-                                >
-                                    <?= $escaper->escapeHtml(__('Add to Cart')) ?>
-                                </button>
-                                <a
-                                    :href="getConfigureUrl"
-                                    x-show="productIsVisibleInSite"
-                                    class="btn p-2"
-                                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Edit product "%0"')) ?>"
-                                    :aria-label="productAriaLabel"
-                                >
-                                    <?= $lucideIcons->pencilHtml('', 20, 20, ['aria-hidden' => 'true']); ?>
-                                </a>
-                                <button
-                                    type="button"
-                                    class="btn p-2"
-                                    @click="removeProductsFromWishlist"
-                                    data-aria-label="<?= $escaper->escapeHtmlAttr(__('Remove product "%0" from cart')) ?>"
-                                    :aria-label="productAriaLabel"
-                                >
-                                    <?= $lucideIcons->trashHtml('', 20, 20, ['aria-hidden' => 'true']); ?>
-                                </button>
-                            </div>
-                        </div>
+    <template x-if="searchQueryIsEmpty">
+        <div class="contents">
+            <template x-if="wishlistIsEmpty">
+                <div class="grow grid place-items-center">
+                    <div class="text-center">
+                        <?= $lucideIcons->heartPlusHtml('inline-block text-fg/30 max-w-full h-auto', 120, 120, ['aria-hidden' => 'true']); ?>
+                        <p class="mt-10 text-xl">
+                            <strong><?= $escaper->escapeHtml(__('Wishlist is empty')) ?></strong>
+                        </p>
                     </div>
-                </li>
+                </div>
             </template>
-        </ul>
+
+            <template x-if="itemsCount">
+                <ul class="grow flex flex-col overflow-y-auto overscroll-y-contain mask-overflow mask-dir-y">
+                    <template x-for="item in wishlistItems">
+                        <?= /** @noEscape */ $block->getChildHtml('wishlist-item'); ?>
+                    </template>
+                </ul>
+            </template>
+        </div>
     </template>
 
     <?= $block->getChildHtml('wishlist-drawer.bottom'); ?>

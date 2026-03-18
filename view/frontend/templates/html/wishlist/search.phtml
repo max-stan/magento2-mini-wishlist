@@ -36,8 +36,8 @@ $lucideIcons = $viewModels->require(LucideIcons::class);
             type="search"
             autocomplete="off"
             name="q"
-            x-model="query"
-            @input.debounce.300ms="search"
+            :value="query"
+            @input.debounce.500ms="search"
             placeholder="<?= $escaper->escapeHtmlAttr(__('Search entire store here...')) ?>"
             maxlength="<?= $escaper->escapeHtmlAttr($helper->getMaxQueryLength()) ?>"
             class="form-input w-full rounded-e-none"
@@ -52,3 +52,11 @@ $lucideIcons = $viewModels->require(LucideIcons::class);
         </button>
     </form>
 </search>
+
+<template x-if="query">
+    <ul class="grow flex flex-col overflow-y-auto overscroll-y-contain mask-overflow mask-dir-y">
+        <template x-for="item in searchItems">
+            <?= /** @noEscape */ $block->getChildHtml('search-item'); ?>
+        </template>
+    </ul>
+</template>

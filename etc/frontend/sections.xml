@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Customer:etc/sections.xsd">
+    <action name="wishlist/index/add">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/index/remove">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/index/updateItemOptions">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/index/update">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/index/cart">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/index/fromcart">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/index/allcart">
+        <section name="wishlist_full"/>
+    </action>
+    <action name="wishlist/shared/allcart">
+        <section name="wishlist_full"/>
+    </action>
+</config>

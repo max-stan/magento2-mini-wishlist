@@ -19,12 +19,23 @@
                 template="MaxStan_MiniWishlist::html/wishlist/wishlist-drawer.phtml"
                 ifconfig="wishlist/general/active"
             >
-                <block name="wishlist-drawer-loading" as="loading" template="Hyva_Theme::ui/loading.phtml"/>
+                <block name="wishlist-drawer-loading"
+                       as="loading"
+                       template="Hyva_Theme::ui/loading.phtml" />
+                <block name="wishlist-drawer.components.wishlist.item"
+                       as="wishlist-item"
+                       template="MaxStan_MiniWishlist::html/components/wishlist/item.phtml" />
+
                 <container name="extra_actions"/>
                 <container name="wishlist-drawer.top"/>
                 <container name="wishlist-drawer.items.before">
                     <block name="wishlist-drawer-search"
-                           template="MaxStan_MiniWishlist::html/wishlist/search.phtml" />
+                           template="MaxStan_MiniWishlist::html/wishlist/search.phtml"
+                    >
+                        <block name="wishlist-drawer.components.search.item"
+                               as="search-item"
+                               template="MaxStan_MiniWishlist::html/components/search/item.phtml" />
+                    </block>
                 </container>
                 <container name="wishlist-drawer.totals.before"/>
                 <container name="wishlist-drawer.bottom"/>
