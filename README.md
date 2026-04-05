@@ -1,6 +1,6 @@
 # 🛍️ Magento 2 Mini Wishlist
 
-> Every page redirect is a chance for your customer to leave. Mini Wishlist removes that risk by turning the wishlist into an instant slide-out drawer that works from any page.
+> Fully CSP-compatible slide-out wishlist drawer for Hyvä themes with inline product search, GraphQL-based add/remove
 
 Customers browse, save, and manage their wishlist without ever leaving the product catalog. They search and add products directly inside the drawer, remove items with a single click, and see their wishlist count update in the header in real time. No redirects. No lost context. Just a smoother path from interest to purchase.
 
