@@ -29,6 +29,8 @@
                 <container name="extra_actions"/>
                 <container name="wishlist-drawer.top"/>
                 <container name="wishlist-drawer.items.before">
+                    <block name="wishlist-drawer-messages"
+                           template="MaxStan_MiniWishlist::html/wishlist/messages.phtml" />
                     <block name="wishlist-drawer-search"
                            template="MaxStan_MiniWishlist::html/wishlist/search.phtml"
                     >

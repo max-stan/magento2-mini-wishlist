@@ -70,6 +70,7 @@ $viewConfig = $viewModels->require(ViewConfig::class);
                     class="btn btn-primary"
                     data-aria-label="<?= $escaper->escapeHtmlAttr(__('Add product "%0" to cart')) ?>"
                     :aria-label="productAriaLabel"
+                    @click="addProductsToWishlist"
                 >
                     <?= $escaper->escapeHtml(__('Add to Wishlist')) ?>
                 </button>

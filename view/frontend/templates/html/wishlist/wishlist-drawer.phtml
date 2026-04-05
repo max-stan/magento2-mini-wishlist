@@ -30,6 +30,9 @@ $gqlRemoveProductsFromWishlistQuery = '
             wishlist {
                 items_count
             }
+            user_errors {
+                message
+            }
         }
     }
 ';
@@ -50,6 +53,26 @@ $gqlProductsQuery = '
                         }
                     }
                 }
+            }
+        }
+    }
+';
+$gqlAddProductsToWishlist = '
+    mutation ($wishlistId: ID!, $sku: String!) {
+        addProductsToWishlist(
+            wishlistId: $wishlistId,
+            wishlistItems: [
+                {
+                    sku: $sku
+                    quantity: 1
+                }
+            ]
+        ) {
+            wishlist {
+                id
+            }
+            user_errors {
+                message
             }
         }
     }
@@ -136,13 +159,35 @@ $gqlProductsQuery = '
                 };
 
                 this.isLoading = true;
-                const response = await hyvaWishlistGraphql('POST', query, variables);
+                const response = await this.hyvaWishlistGraphql('POST', query, variables);
                 this.isLoading = false;
-                if (response.ok) {
-                    window.dispatchEvent(
-                        new CustomEvent('reload-customer-section-data', {
-                            detail: { sections: ['wishlist', 'wishlist_full'] }
-                        })
+
+                const result = await this.processResponse(response, 'removeProductsFromWishlistQuery');
+                if (result) {
+                    this.dispatchMessage(
+                        '<?= $escaper->escapeJs(__('Item has been successfully removed from the wishlist')) ?>',
+                        'success'
+                    );
+                }
+
+            },
+
+            async addProductsToWishlist() {
+                const query = `<?= /** @noEscape */ $gqlViewModel->query('addProductsToWishlist', $gqlAddProductsToWishlist) ?>`;
+                const variables = {
+                    wishlistId: this.wishlist.wishlist_id,
+                    sku: this.item.sku
+                };
+
+                this.isLoading = true;
+                const response = await this.hyvaWishlistGraphql('POST', query, variables);
+                this.isLoading = false;
+
+                const result = await this.processResponse(response, 'addProductsToWishlist');
+                if (result) {
+                    this.dispatchMessage(
+                        '<?= $escaper->escapeJs(__('Item has been successfully added to wishlist')) ?>',
+                        'success'
                     );
                 }
             },
@@ -158,13 +203,86 @@ $gqlProductsQuery = '
                     query: this.query
                 };
 
-                const response = await hyvaWishlistGraphql('POST', query, variables);
+                const response = await this.hyvaWishlistGraphql('POST', query, variables);
                 if (!response.ok) {
                     return;
                 }
 
                 const result = await response.json();
                 this.searchItems = result.data.products.items;
+            },
+
+            async hyvaWishlistGraphql(method = 'GET', query, variables) {
+                try {
+                    return await fetch(BASE_URL + 'graphql', {
+                        method,
+                        headers: {
+                            'Store': '<?= $escaper->escapeJs($storeViewModel->getStoreCode()) ?>',
+                            'Content-Currency': '<?= $escaper->escapeJs($currencyViewModel->getCurrentCurrencyCode()) ?>',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            query,
+                            variables
+                        })
+                    });
+                } catch (error) {
+                    console.log(error);
+                }
+
+                return null;
+            },
+
+            async processResponse(response, operationName) {
+                let error = null;
+
+                try {
+                    const result = await response.json();
+                    this.validateResponse(result, operationName);
+                } catch (e) {
+                    error = '<?= $escaper->escapeJs(__('Cannot connect to the server')) ?>';
+                    if (e instanceof WishlistGraphQlError) {
+                        error = e.message;
+                    }
+                }
+
+                window.dispatchEvent(
+                    new CustomEvent('reload-customer-section-data', {
+                        detail: { sections: ['wishlist', 'wishlist_full'] }
+                    })
+                );
+
+                if (error) {
+                    this.dispatchMessage(
+                        error,
+                        'error'
+                    );
+
+                    return false;
+                }
+
+                return true;
+            },
+
+            validateResponse(result, operationName) {
+                if (result.errors) {
+                    throw new WishlistGraphQlError('<?= $escaper->escapeJs(__('Something went wrong during operation')) ?>');
+                }
+
+                if (result.data[operationName]?.user_errors.length) {
+                    throw new WishlistGraphQlError(result?.data[operationName]?.user_errors[0]);
+                }
+            },
+
+            dispatchMessage(text, type) {
+                window.dispatchEvent(
+                    new CustomEvent('wishlist-popup-message', {
+                        detail: {
+                            message: { type, text },
+                            hideAfter: 5000
+                        }
+                    })
+                );
             },
 
             eventListeners: {
@@ -178,30 +296,16 @@ $gqlProductsQuery = '
         }
     }
 
+    class WishlistGraphQlError extends Error {
+        constructor(message) {
+            super(message);
+            this.name = 'GraphQlError';
+        }
+    }
+
     window.addEventListener('alpine:init', () => {
         Alpine.data('initWishlistDrawer', initWishlistDrawer);
     }, { once: true });
-
-    async function hyvaWishlistGraphql(method = 'GET', query, variables) {
-        try {
-            return await fetch(BASE_URL + 'graphql', {
-                method,
-                headers: {
-                    'Store': '<?= $escaper->escapeJs($storeViewModel->getStoreCode()) ?>',
-                    'Content-Currency': '<?= $escaper->escapeJs($currencyViewModel->getCurrentCurrencyCode()) ?>',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query,
-                    variables
-                })
-            });
-        } catch (error) {
-            console.log(error);
-        }
-
-        return null;
-    }
 </script>
 <?php $hyvaCsp->registerInlineScript() ?>
 
