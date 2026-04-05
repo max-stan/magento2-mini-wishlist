@@ -1,7 +1,7 @@
 {
     "name": "max-stan/module-mini-wishlist",
     "type": "magento2-module",
-    "description": "Mini wishlist popup for Hyvä theme with products search",
+    "description": "Fully CSP-compatible slide-out wishlist drawer for Hyvä themes with inline product search, GraphQL-based add/remove",
     "license": "MIT",
     "authors": [
         {
@@ -10,7 +10,8 @@
         }
     ],
     "require": {
-        "magento/framework": "*"
+        "magento/framework": "*",
+        "php": ">=8.3"
     },
     "autoload": {
         "files": [
